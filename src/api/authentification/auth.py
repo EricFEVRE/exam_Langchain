@@ -2,6 +2,18 @@ import secrets
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+import jwt
+import os
+from datetime import datetime, timedelta, timezone
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# Configuration
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
+
 
 app = FastAPI(title="Assistant Python — API d'authentification")
 
@@ -9,8 +21,20 @@ app = FastAPI(title="Assistant Python — API d'authentification")
 # { username: hashed_password }
 fake_users_db: dict[str, str] = {}
 
-# { token: username }
-_tokens: dict[str, str] = {}
+# ── création token JWT ───────────────────────────────────────────────────────
+def _create_token(username: str) -> str:
+    """Génère un JWT signé pour l'utilisateur."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    
+    # Le 'payload' contient les données de l'utilisateur
+    to_encode = {
+        "sub": username,  # 'sub' est le standard pour le sujet (l'user)
+        "exp": expire     # 'exp' est le standard pour l'expiration
+    }
+    
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
 
 # ── Schémas ───────────────────────────────────────────────────────────────────
 
@@ -23,7 +47,7 @@ class User(BaseModel):
     username: str
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── passeword management ───────────────────────────────────────────────────────────
 
 def _hash(password: str) -> str:
     """Hash minimaliste pour un contexte de démo (ne pas utiliser en prod)."""
@@ -31,28 +55,25 @@ def _hash(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
 
-def _create_token(username: str) -> str:
-    token = secrets.token_hex(32)
-    _tokens[token] = username
-    return token
-
-
 # ── Dépendance d'authentification ─────────────────────────────────────────────
 
 _bearer = HTTPBearer()
-
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> User:
     token = credentials.credentials
-    username = _tokens.get(token)
-    if not username:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token invalide ou expiré.",
-        )
-    return User(username=username)
+    try:
+        # On décode et vérifie la signature du token
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Token invalide")
+        return User(username=username)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expiré")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token invalide")
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────

@@ -1,8 +1,7 @@
-
-import httpx
 import os
-from fastapi import Depends, FastAPI, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from src.core.chains import (
@@ -18,41 +17,30 @@ from src.memory import memory
 class User(BaseModel):
     username: str
 
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+
 _bearer = HTTPBearer()
 
-AUTH_URL = os.getenv("AUTH_URL", "http://localhost:8001") # Local par défaut, Docker sinon
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer)
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> User:
     token = credentials.credentials
-    
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(
-                f"{AUTH_URL}/me",
-                headers={"Authorization": f"Bearer {token}"}
-            )
-        except httpx.RequestError:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Le service d'authentification est injoignable."
-            )
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token invalide ou expiré (vérifié par Auth-API)."
-        )
-    
-    # Si OK, on transforme le JSON reçu en objet User
-    data = response.json()
-    return User(username=data["username"])
+    try:
+        # On vérifie la signature ET la date d'expiration localement
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        return User(username=username)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expiré")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Token invalide")
 
 
 # ── API principale ─────────────────────────────────────────────────────────────
-app = FastAPI(title="Assistant Python — API principale")
-
+app = FastAPI(
+    title="Assistant Python — API principale"
+)
 
 # ── Schémas de requête ────────────────────────────────────────────────────────
 
@@ -78,7 +66,7 @@ def analyze(
         raise HTTPException(status_code=500, detail=str(e))
 
     data = result.model_dump()
-    memory.add_to_history(current_user.username, {"type": "analyze", **data})
+    # memory.add_to_history(current_user.username, {"type": "analyze", **data})
     return data
 
 
@@ -96,7 +84,7 @@ def generate_test(
         raise HTTPException(status_code=500, detail=str(e))
 
     data = result.model_dump()
-    memory.add_to_history(current_user.username, {"type": "generate_test", **data})
+    # memory.add_to_history(current_user.username, {"type": "generate_test", **data})
     return data
 
 
@@ -114,7 +102,7 @@ def explain_test(
         raise HTTPException(status_code=500, detail=str(e))
 
     data = result.model_dump()
-    memory.add_to_history(current_user.username, {"type": "explain_test", **data})
+    # memory.add_to_history(current_user.username, {"type": "explain_test", **data})
     return data
 
 
@@ -139,9 +127,11 @@ def full_pipeline(
         raise HTTPException(status_code=500, detail=f"Erreur analyse : {e}")
 
     analysis_data = analysis.model_dump()
+    """
     memory.add_to_history(
         current_user.username, {"type": "full_pipeline_analysis", **analysis_data}
     )
+    """
 
     # Étape 2 — Arrêt si code non optimal
     if not analysis.is_optimal:
@@ -165,6 +155,7 @@ def full_pipeline(
 
     explanation_data = explanation_result.model_dump()
 
+    """
     memory.add_to_history(
         current_user.username,
         {
@@ -174,6 +165,7 @@ def full_pipeline(
             "explanation": explanation_data,
         },
     )
+    """
 
     return {
         "analysis": analysis_data,
