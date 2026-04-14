@@ -4,9 +4,8 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-
-ASSISTANT_API = os.getenv("ASSISTANT_API_URL", "http://localhost:8000")
-AUTH_API = os.getenv("AUTH_API_URL", "http://localhost:8001")
+AUTH_API  = os.getenv("AUTH_URL", "http://auth:8001")
+ASSISTANT_API = os.getenv("API_URL", "http://main:8000")
 
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(

@@ -2,9 +2,9 @@ from langchain_core.runnables import Runnable
 from langgraph.graph import START, MessagesState, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 
-from src.core.llm import get_llm
-from src.core.schemas import CodeAnalysisResult, GeneratedTestResult, TestExplanationResult
-from src.prompts.prompts import (
+from core.llm import get_llm
+from core.schemas import CodeAnalysisResult, GeneratedTestResult, TestExplanationResult
+from prompts.prompts import (
     chat_prompt,
     code_analysis_prompt,
     test_explanation_prompt,

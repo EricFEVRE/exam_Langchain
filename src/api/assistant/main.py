@@ -4,13 +4,13 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
-from src.core.chains import (
+from core.chains import (
     get_analysis_chain,
     get_chat_agent,
     get_explain_test_chain,
     get_test_chain,
 )
-from src.memory import memory
+from memory import memory
 
 # ── vérification de l'authentification───────────────────────────────────────────
 # On définit le schéma localement pour que l'API sache à quoi ressemble un User

@@ -1,13 +1,19 @@
 services:
   auth:
-
+    build:
+      context: .
+      dockerfile: src/api/authentification/Dockerfile.auth
     ports:
       - "8001:8001"
     networks:
       - app_network
-
+    env_file:
+      - .env  
+ 
   main:
-
+    build:
+      context: .
+      dockerfile: src/api/assistant/Dockerfile.main
     ports:
       - "8000:8000"
     depends_on:
@@ -16,9 +22,11 @@ services:
       - app_network
     env_file:
       - .env
-
+ 
   streamlit:
-
+    build:
+      context: .
+      dockerfile: src/Dockerfile.streamlit
     ports:
       - "8501:8501"
     depends_on:
@@ -26,7 +34,12 @@ services:
       - main
     networks:
       - app_network
-
+    env_file:
+      - .env  
+    environment:
+      AUTH_URL: "http://auth:8001"
+      API_URL: "http://main:8000"  
+ 
   tests:
     build:
       context: .
@@ -40,7 +53,10 @@ services:
       API_URL: "http://main:8000"
     networks:
       - app_network
-
+    env_file:
+      - .env  
+ 
 networks:
   app_network:
     driver: bridge
+ 
